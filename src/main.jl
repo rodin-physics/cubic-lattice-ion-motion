@@ -3,7 +3,7 @@ using ForwardDiff
 using JLD2
 # using LinearAlgebra
 using ProgressMeter
-# using QuadGK
+using QuadGK
 # using SparseArrays
 # using SpecialFunctions
 include("system.jl")

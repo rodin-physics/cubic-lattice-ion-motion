@@ -96,7 +96,9 @@ Threads.@threads for p in params
             numerical_loss[ii] = numerical_Δ(Φ0, λ, s, init_speed, DynamicalMatrix)[1]
 
         end
-        analytic_loss = [sum(Δ_1D_analytic(speed, Φ0, λ, s, ω_par, ω_perp, ν)) for speed in dense_speeds]
+        analytic_loss = [
+            sum(Δ_1D_analytic(speed, Φ0, λ, s, ω_par, ω_perp, ν)) for speed in dense_speeds
+        ]
 
         save_object(
             "Data/1D_Loss/1D_Gaussian_Loss_s$(s)_λ$(λ)_ν$(ν).jld2",

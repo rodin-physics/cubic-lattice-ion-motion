@@ -22,6 +22,20 @@ function dynamical_matrix(coupling::Vector{Coupling})
 
 end
 
+function dynamical_matrix_small(coupling::Vector{Coupling})
+    res = function f(θ, ϕ)
+        D = zeros(ComplexF64, 3, 3)
+        for c in coupling
+            D[c.d1, c.d2] +=
+                c.k * (-1im * dot([cos(ϕ) * sin(θ), sin(ϕ) * sin(θ), cos(θ)], c.disp))^2 / 2
+        end
+        return D
+    end
+
+    return res
+
+end
+
 function system(size_x::Int, size_y::Int, size_z::Int, coupling::Vector{Coupling})
     # Enumerate all the atoms in the system
     atoms = Iterators.product([1:size_x, 1:size_y, 1:size_z]...) |> collect |> vec

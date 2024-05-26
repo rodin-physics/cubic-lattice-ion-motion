@@ -54,3 +54,22 @@ function numerical_Δ(Φ0, λ, s, σ_dot, DynamicalMatrix)
     )
     return res
 end
+
+function Loss_Matrix(DynamicalMatrix_Small)
+    function fun_int(q)
+        # Solve the eigenproblem
+        eig = eigen(DynamicalMatrix_Small(q...))
+        ωs = sqrt.(eig.values)
+        ηs = eig.vectors
+        res = sum([(ηs[:, jj] * ηs[:, jj]') ./ ωs[jj]^3 for jj = 1:3])
+        return res
+    end
+    res = hcubature(
+        q -> sin(q[1]) .* fun_int(q) / 32 / π^3,
+        [0, 0],
+        [π, 2 * π],
+        rtol = 1e-4,
+        # initdiv = 20,
+    )
+    return res
+end
