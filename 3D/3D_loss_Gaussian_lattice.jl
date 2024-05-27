@@ -10,7 +10,7 @@ k2 = 5                      # Next-nearest neighbor force constant
 
 size_x = size_y = size_z = 50
 # Interaction
-Φ0 = 0.01/4                 # Amplitude of the Gaussian interaction
+Φ0 = 0.01 / 4                 # Amplitude of the Gaussian interaction
 λs = [1 / 2, 1, 2, 4]       # Extent of the Gaussian interaction
 
 nPts = 50

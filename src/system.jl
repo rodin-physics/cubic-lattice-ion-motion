@@ -1,3 +1,4 @@
+using Distributions
 using ForwardDiff
 using LinearAlgebra
 using SparseArrays
@@ -145,5 +146,49 @@ function RKstep(μ, α, sys, atoms, Φ, current_state, δτ)
     res =
         current_state .+
         (δτ / 90) .* (7 .* k1 .+ 32 .* k3 .+ 12 .* k4 .+ 32 .* k5 .+ 7 .* k6)
+    return res
+end
+
+## Generating Homogeneous motion
+
+# Mode amplitude
+function ζq(ωq, ωT)
+    η = 1e-12
+    # Subtract a small number from p. The reason is that for low ωT, p ≈ 1,
+    # causing issues with the rand() generator
+    n = rand(Geometric(1 - exp(-ωq / ωT) - η))
+    res = √(n + 1 / 2) * √(2 / ωq)
+    return res
+end
+
+function homogeneous_motion(dyn_mat, ωT)
+    eig = eigen(dyn_mat)
+    ωs = sqrt.(eig.values) |> real
+    ζs = [ζq(ωq, ωT) for ωq in ωs]
+    ηs = eig.vectors
+    ϕs = 2 * π * rand(length(ωs))
+    disp = [ζs[ii] .* ηs[:, ii] * exp(1im * ϕs[ii]) for ii = 1:3] |> sum
+    speed =
+        [-2im * π .* ωs[ii] .* ζs[ii] .* ηs[:, ii] * exp(1im * ϕs[ii]) for ii = 1:3] |> sum
+    return disp, speed
+
+end
+
+function Loss_Matrix(DynamicalMatrix_Small)
+    function fun_int(q)
+        # Solve the eigenproblem
+        eig = eigen(DynamicalMatrix_Small(q...))
+        ωs = sqrt.(eig.values)
+        ηs = eig.vectors
+        res = sum([(ηs[:, jj] * ηs[:, jj]') ./ ωs[jj]^3 for jj = 1:3])
+        return res
+    end
+    res = hcubature(
+        q -> sin(q[1]) .* fun_int(q) / 32 / π^3,
+        [0, 0],
+        [π, 2 * π],
+        rtol = 1e-4,
+        # initdiv = 20,
+    )
     return res
 end

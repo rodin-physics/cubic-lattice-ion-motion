@@ -87,7 +87,13 @@ for jj in eachindex(ax)
             markersize = 20,
         )
 
-        lines!(ax[jj], d[2], cs[jj][ii] * ones(nPts) |> real, color = colors[ii], lineswidth = 2)
+        lines!(
+            ax[jj],
+            d[2],
+            cs[jj][ii] * ones(nPts) |> real,
+            color = colors[ii],
+            lineswidth = 2,
+        )
     end
 end
 
