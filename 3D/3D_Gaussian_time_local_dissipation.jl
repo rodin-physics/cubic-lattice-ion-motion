@@ -1,29 +1,28 @@
-include("../src/main.jl")
+include("../src/unitless.jl")
+include("../src/analytic.jl")
 
 ## PARAMETERS
-μ = [Inf, Inf, 1 / 10]        # Mass of the particle in the units of chain masses
-α = 5                       # Lattice constant
+μ = [Inf, Inf, 1]           # Mass of the particle in the units of chain masses
+α = 2                       # Lattice constant
 k1 = 15                     # Nearest neighbor force constant
 k2 = 5                      # Next-nearest neighbor force constant
 δτ = 1e-3                   # Time step
 
-τ_max = 10
+τ_max = 30
 nPts = floor(τ_max / δτ) |> Int
 
-size_x = size_y = size_z = 50
-atoms =
-    [(1, 1, 1), (1, 2, 1), (2, 1, 1), (2, 2, 1), (1, 1, 2), (1, 2, 2), (2, 1, 2), (2, 2, 2)]
-
-init_speed = 30
-σ = [1 / 2, 1 / 2, 1 / 2] .* α
+init_pos = 3.5 * α
+init_speed = 7.5
+σ = [0, 0, init_pos]
 σ_dot = [0, 0, init_speed]
 
-# Interaction
-Φ0 = 1000
-λ = 1 / 8
+atoms = [(1, 1, n) for n = 1:8]
+size_x = size_y = size_z = 100
 
+Φ0 = 1
+λ = 1 / 2
 @inline function Φ(r)
-    res = Φ0 / (1 + exp((norm(r) - 3) / λ))
+    res = Φ0 * exp(-dot(r, r) / 2 / λ^2)
     return res
 end
 
@@ -38,11 +37,6 @@ function Φ_total_grad(σ)
     )
     return res
 end
-# Φ_total_grad([2.5,2.5,5])
-Φ_total([2.5, 2.5, 2.5])
-# atom_positions = [(cube_atoms[a] .- 1) .* α for a in eachindex(cube_atoms)]
-# Pot = [Φ(pos .- σ) for pos in atom_positions] |> sum
-# Pot = [Φ(pos .- [0,2.5,2.5]) for pos in atom_positions] |> sum
 
 # LATTICE
 # Nearest-neighbor and next-nearest neighbor displacements
@@ -153,12 +147,10 @@ function polaron_potential(σ)
 end
 
 function total_potential(σ)
-    res = Φ_total(σ) - 0 * polaron_potential(σ)
+    res = Φ_total(σ) - polaron_potential(σ)
     return res
 end
-# polaron_potential([2.5,2.5,5])
-# total_potential([2.5,2.5,2.5])
-# total_potential([2.5,2.5,5])
+
 # -ForwardDiff.gradient(total_potential, [1,2,1])
 # total_potential([0,0,3α])-total_potential([0,0,3.5α])
 function derivative_particle(σ, σdot)
@@ -221,13 +213,3 @@ if !isfile("Data/3D_Loss/Local_Loss.jld2")
         (pos, speed, pos_particle, speed_particle, δτ, Φ0, λ),
     )
 end
-pos_particle, speed_particle = solve_particle()
-lines([x[3] for x in pos_particle])
-lines([x[3] for x in pos])
-lines((abs.([x[3] for x in pos] .- 2.5)))
-
-pos_particle
-
-pos, speed = solve_full()
-
-# 2 * pi * α * 5

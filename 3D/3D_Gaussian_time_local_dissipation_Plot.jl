@@ -1,4 +1,4 @@
-include("../3D/3D_time_local_dissipation.jl")
+include("../3D/3D_Gaussian_time_local_dissipation.jl")
 
 (pos, speed, pos_particle, speed_particle, δτ, Φ0, λ) =
     load_object("Data/3D_Loss/Local_Loss.jld2")

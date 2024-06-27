@@ -62,7 +62,7 @@ DynMat = dynamical_matrix(couplings)
 ωT = 25
 Corr(DynMat, ωT, .5, [3,3,3])[1] ./ ωT
 Corr(DynMat, ωT, 0.0, [0,0,0])[1]
-
+.08/10*3|>sqrt
 
 # Make the system
 sys = system(size_x, size_y, size_z, couplings)
