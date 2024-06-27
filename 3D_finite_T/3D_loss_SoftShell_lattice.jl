@@ -1,27 +1,23 @@
-include("../src/unitless.jl")
-include("../src/analytic.jl")
+include("../src/main.jl")
+include("../src/plotting.jl")
 
-dirs = ["Data", "Data/3D_Loss"]
-[isdir(d) ? nothing : mkdir(d) for d in dirs]
 ## PARAMETERS
-μ = [Inf, Inf, 1]           # Mass of the particle in the units of chain masses
-α = 2                       # Lattice constant
+μ = [Inf, Inf, 1 / 10]      # Mass of the particle in the units of chain masses
+α = 5                       # Lattice constant
 k1 = 15                     # Nearest neighbor force constant
 k2 = 5                      # Next-nearest neighbor force constant
 
 size_x = size_y = size_z = 50
+atoms = Iterators.product([1:size_x, 1:size_y, 1:size_z]...) |> collect |> vec
+
+speed_max = (2 * π * α * √(k1 + 2 * k2)) / 2  # Max speed is 0.5 speed of sound
+δτ = 1e-3
 # Interaction
-Φ0 = 0.01 / 4                 # Amplitude of the Gaussian interaction
-λs = [1 / 2, 1, 2, 4]       # Extent of the Gaussian interaction
+Φ0 = 1 / 100
+λs = [1, 1 / 2, 1 / 4, 1 / 8]
 
+# Interaction
 nPts = 50
-speed_min = 2
-speed_max = 80
-init_speeds = range(speed_min, speed_max, length = nPts)
-
-# Simulation settings
-nPts = 50                   # Number of points
-δτ = 1e-3                   # Time step
 
 # LATTICE
 # Nearest-neighbor and next-nearest neighbor displacements
@@ -73,59 +69,41 @@ self_coupling = filter(x -> x.k != 0, self_coupling)
 couplings = vcat(N_couplings, NN_couplings, self_coupling)
 
 # Dynamical matrix
-DynamicalMatrix = dynamical_matrix(couplings)
 DynamicalMatrixSmall = dynamical_matrix_small(couplings)
 
 # Make the system
 sys = system(size_x, size_y, size_z, couplings)
 
-function Φ_full(σ, λ, atoms, α)
-    res = [exp(-norm(σ .- (a .- (1, 1, 1)) .* α)^2 / 2 / λ^2) for a in atoms] |> sum
-    return res
-end
-
-function Hess_Φ(σ, λ, atoms, α)
-    res = ForwardDiff.hessian(σ -> Φ_full(σ, λ, atoms, α), σ)
-    return res
-end
-M_loss = Loss_Matrix(DynamicalMatrixSmall)[1]
-
-# Δ/(σ̇ Φ0²) in low-speed limit
-function Δ_pass(σ0, σ_dot, λ, atoms, α)
-    σ_dot_unit = normalize(σ_dot)
-    r = quadgk(
-        t ->
-            σ_dot_unit' *
-            Hess_Φ(σ_dot_unit * t + σ0, λ, atoms, α) *
-            M_loss *
-            Hess_Φ(σ_dot_unit * t + σ0, λ, atoms, α) *
-            σ_dot_unit,
-        -Inf,
-        Inf,
-    )
-    return r[1]
-
-end
-
 println("Starting calculations...")
 
 ## SIMULATIONS
-atoms = [(1, 1, 1), (1, 2, 1), (2, 1, 1), (2, 2, 1)]
+face_atoms = [(1, 1, 1), (1, 2, 1), (2, 1, 1), (2, 2, 1)]
+cube_atoms =
+    [(1, 1, 1), (1, 2, 1), (2, 1, 1), (2, 2, 1), (1, 1, 2), (1, 2, 2), (2, 1, 2), (2, 2, 2)]
+
 for λ in λs
 
-    if !isfile("Data/3D_Loss/3D_Gaussian_Square_Loss_λ$(λ).jld2")
+    @inline function Φ(r)
+        res = Φ0 / (1 + exp((norm(r) - 3) / λ))
+        return (isnan(res) ? 0 : res)
+    end
 
-        # Interaction function
-        @inline function Φ(r)
-            res = Φ0 * exp(-dot(r, r) / 2 / λ^2)
-            return res
-        end
+    σ_edge = [floor(size_x / 2), floor(size_y / 2) + 1 / 2, floor(size_z / 2) + 1 / 2] .* α
+
+    atom_positions = [(atoms[a] .- 1) .* α for a in eachindex(atoms)]
+    Pot = [Φ(pos .- σ_edge) for pos in atom_positions] |> sum
+
+    speed_min = (Pot * 8 * π^2 / μ[3] |> sqrt) * 2
+    init_speeds = range(speed_min, speed_max, length = nPts)
+
+    if !isfile("Data/3D_Loss/3D_SoftShell_Square_Loss_λ$(λ).jld2")
 
         loss = zeros(nPts)
         prog = Progress(nPts)
         Threads.@threads for ii in eachindex(loss)
-            init_pos = -7 * λ
+            init_pos = -3 * α
             init_speed = init_speeds[ii]
+            println(init_speed)
             σ = [α / 2, α / 2, init_pos]
             σ_dot = [0, 0, init_speed]
 
@@ -133,39 +111,27 @@ for λ in λs
             ρ_dot_init = zeros(length(sys[1]))
 
             current_state = (ρ_init, ρ_dot_init, σ, σ_dot)
-            while current_state[3][3] < 7 * λ
-                current_state = RKstep(μ, α, sys, atoms, Φ, current_state, δτ)
+            while current_state[3][3] < 3 * α
+                current_state = RKstep(μ, α, sys, face_atoms, Φ, current_state, δτ)
+                GC.safepoint()
             end
             final_speed = current_state[4][3]
-            loss[ii] = (init_speed^2) / (8 * π^2) - (final_speed^2) / (8 * π^2)
+            loss[ii] = ((init_speed^2) / (8 * π^2) - (final_speed^2) / (8 * π^2)) * μ[3]
             next!(prog)
         end
 
         save_object(
-            "Data/3D_Loss/3D_Gaussian_Square_Loss_λ$(λ).jld2",
+            "Data/3D_Loss/3D_SoftShell_Square_Loss_λ$(λ).jld2",
             (λ, init_speeds, loss),
         )
     end
-end
 
-atoms =
-    [(1, 1, 1), (1, 2, 1), (2, 1, 1), (2, 2, 1), (1, 1, 2), (1, 2, 2), (2, 1, 2), (2, 2, 2)]
-
-## SIMULATIONS
-for λ in λs
-
-    if !isfile("Data/3D_Loss/3D_Gaussian_Cube_Loss_λ$(λ).jld2")
-
-        # Interaction function
-        @inline function Φ(r)
-            res = Φ0 * exp(-dot(r, r) / 2 / λ^2)
-            return res
-        end
+    if !isfile("Data/3D_Loss/3D_SoftShell_Cube_Loss_λ$(λ).jld2")
 
         loss = zeros(nPts)
         prog = Progress(nPts)
         Threads.@threads for ii in eachindex(loss)
-            init_pos = -7 * λ
+            init_pos = -3 * α
             init_speed = init_speeds[ii]
             σ = [α / 2, α / 2, init_pos]
             σ_dot = [0, 0, init_speed]
@@ -174,14 +140,42 @@ for λ in λs
             ρ_dot_init = zeros(length(sys[1]))
 
             current_state = (ρ_init, ρ_dot_init, σ, σ_dot)
-            while current_state[3][3] < 7 * λ + α
-                current_state = RKstep(μ, α, sys, atoms, Φ, current_state, δτ)
+            while current_state[3][3] < 4 * α
+                current_state = RKstep(μ, α, sys, cube_atoms, Φ, current_state, δτ)
+                GC.safepoint()
             end
             final_speed = current_state[4][3]
-            loss[ii] = (init_speed^2) / (8 * π^2) - (final_speed^2) / (8 * π^2)
+            loss[ii] = ((init_speed^2) / (8 * π^2) - (final_speed^2) / (8 * π^2)) * μ[3]
             next!(prog)
         end
 
-        save_object("Data/3D_Loss/3D_Gaussian_Cube_Loss_λ$(λ).jld2", (λ, init_speeds, loss))
+        save_object(
+            "Data/3D_Loss/3D_SoftShell_Cube_Loss_λ$(λ).jld2",
+            (λ, init_speeds, loss),
+        )
     end
+
 end
+
+
+# init_pos = -3 * α
+# init_speed = 60
+# println(init_speed)
+# σ = [α / 2, α / 2, init_pos]
+# σ_dot = [0, 0, init_speed]
+
+# ρ_init = zeros(length(sys[1]))
+# ρ_dot_init = zeros(length(sys[1]))
+
+# current_state = (ρ_init, ρ_dot_init, σ, σ_dot)
+# while current_state[3][3] < 3 * α
+#     current_state = RKstep(μ, α, sys, face_atoms, Φ, current_state, δτ)
+#     println(current_state[3][3])
+# end
+# final_speed = current_state[4][3]
+# ((init_speed^2) / (8 * π^2) - (final_speed^2) / (8 * π^2)) * μ[3]
+# λ = 1/2
+# @inline function Φ(r)
+#     res = Φ0 / (1 + exp((norm(r) - 3) / λ))
+#     return (isnan(res) ? 0 : res)
+# end

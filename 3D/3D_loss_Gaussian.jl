@@ -1,4 +1,5 @@
-include("../src/main.jl")
+include("../src/unitless.jl")
+include("../src/analytic.jl")
 
 dirs = ["Data", "Data/3D_Loss"]
 [isdir(d) ? nothing : mkdir(d) for d in dirs]
