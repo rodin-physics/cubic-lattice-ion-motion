@@ -192,7 +192,7 @@ total = [x[5] for x in r]
 
 scatter(speeds, interaction)
 scatter(speeds, elastic)
-scatter(speeds, kinetic )
+scatter(speeds, kinetic)
 scatter(speeds, lattice)
 scatter(speeds, total)
-scatter(speeds, speeds.^2 ./ 8 ./ pi^2 ./ 10)
+scatter(speeds, speeds .^ 2 ./ 8 ./ pi^2 ./ 10)

@@ -1,5 +1,4 @@
 include("../src/unitless.jl")
-include("../src/analytic.jl")
 
 dirs = ["Data", "Data/1D_Loss"]
 [isdir(d) ? nothing : mkdir(d) for d in dirs]
@@ -95,7 +94,7 @@ Threads.@threads for p in params
             loss[ii] = (init_speed^2) / (8 * π^2) - (final_speed^2) / (8 * π^2)
 
             numerical_loss[ii] = numerical_Δ(Φ0, λ, s, init_speed, DynamicalMatrix)[1]
-
+            GC.safepoint()
         end
         analytic_loss = [
             sum(Δ_1D_analytic(speed, Φ0, λ, s, ω_par, ω_perp, ν)) for speed in dense_speeds

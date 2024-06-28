@@ -144,6 +144,7 @@ for p in params
             final_speed = current_state[4][3]
             loss[ii] = (init_speed^2) / (8 * π^2) - (final_speed^2) / (8 * π^2)
             numerical_loss[ii] = numerical_Δ(Φ0, λ, s, init_speed, DynamicalMatrix)[1]
+            GC.safepoint()
             next!(prog)
         end
 

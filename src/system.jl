@@ -1,10 +1,12 @@
 using Distributions
 using ForwardDiff
+using HCubature
 using JLD2
 using LinearAlgebra
 using ProgressMeter
 using QuadGK
 using SparseArrays
+using SpecialFunctions
 
 struct Coupling
     disp::Tuple{Int64,Int64,Int64}  # Displacement

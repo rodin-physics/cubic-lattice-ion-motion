@@ -1,12 +1,11 @@
-include("../src/unitful.jl")
+include("../src/main.jl")
 include("../src/plotting.jl")
 
 ## PARAMETERS
-a = 3                       # Lattice constant in Å
-k1 = 520                    # Nearest neighbor force constant in meV / Å²
-k2 = 170                    # Next-nearest neighbor force constant in meV / Å²
-m = 3.5                     # Lattice mass in meV * (ps / Å)²
-ħ = 0.6582119569            # Planck constant in meV * ps
+μ = [Inf, Inf, 1 / 10]      # Mass of the particle in the units of chain masses
+α = 5                       # Lattice constant
+k1 = 150                    # Nearest neighbor force constant
+k2 = 50                      # Next-nearest neighbor force constant
 
 size_x = size_y = size_z = 30
 
@@ -59,24 +58,88 @@ self_coupling =
 self_coupling = filter(x -> x.k != 0, self_coupling)
 couplings = vcat(N_couplings, NN_couplings, self_coupling)
 
+DynMat = dynamical_matrix(couplings)
+ωT = 25
+Corr(DynMat, ωT, 0.5, [3, 3, 3])[1] ./ ωT
+Corr(DynMat, ωT, 0.0, [0, 0, 0])[1]
+0.08 / 10 * 3 |> sqrt
+
 # Make the system
 sys = system(size_x, size_y, size_z, couplings)
 
-R_mid = [(size_x + 1) / 2 - 1, (size_y + 1) / 2 - 1, (size_z + 1) / 2 - 1] .* a
-R_edge = [(size_x + 0) / 2 - 1, (size_y + 1) / 2 - 1, (size_z + 1) / 2 - 1] .* a
+σ_mid = [(size_x + 1) / 2 - 1, (size_y + 1) / 2 - 1, (size_z + 1) / 2 - 1] .* α
+σ_edge = [(size_x + 0) / 2 - 1, (size_y + 1) / 2 - 1, (size_z + 1) / 2 - 1] .* α
+σ_dot = [0, 0, 0]
 
 
-λ = a / 4
-U0 = 40000
+## RELAXATION
+function relaxation(sys, σ, λ, Φ0, nStep)
+    atoms = Iterators.product([1:size_x, 1:size_y, 1:size_z]...) |> collect |> vec
+    atom_indices = [
+        [
+            get(sys[1], c, ErrorException("Coordinate not found")) for
+            c in [(a..., d) for d in [1, 2, 3]]
+        ] for a in atoms
+    ]
+    @inline function Φ(r)
+        res = Φ0 * exp(-dot(r, r) / 2 / λ^2)
+        return res
+    end
 
-m_unrelaxed = relaxation(sys, R_mid, λ, U0, 0)
-e_unrelaxed = relaxation(sys, R_edge, λ, U0, 0)
+    ρ = zeros(length(sys[1]))
+    ρ_dot = zeros(length(sys[1]))
+    if nStep > 0
+
+        for _ = 1:nStep
+            d = derivatives(μ, α, sys..., atoms, Φ, ρ, ρ_dot, σ, [0, 0, 0])
+            step = min(0.1, maximum(abs.(d[2])))
+            ρ += step .* normalize(d[2])
+        end
+
+        for _ = 1:nStep
+            d = derivatives(μ, α, sys..., atoms, Φ, ρ, ρ_dot, σ, [0, 0, 0])
+            step = min(0.01, maximum(abs.(d[2])))
+            ρ += step .* normalize(d[2])
+        end
+
+        for _ = 1:nStep
+            d = derivatives(μ, α, sys..., atoms, Φ, ρ, ρ_dot, σ, [0, 0, 0])
+            step = min(0.001, maximum(abs.(d[2])))
+            ρ += step .* normalize(d[2])
+        end
+
+        for _ = 1:nStep
+            d = derivatives(μ, α, sys..., atoms, Φ, ρ, ρ_dot, σ, [0, 0, 0])
+            step = min(0.0001, maximum(abs.(d[2])))
+            ρ += step .* normalize(d[2])
+        end
+
+        for _ = 1:nStep
+            d = derivatives(μ, α, sys..., atoms, Φ, ρ, ρ_dot, σ, [0, 0, 0])
+            step = min(0.00001, maximum(abs.(d[2])))
+            ρ += step .* normalize(d[2])
+        end
+
+    end
+    atom_positions = [ρ[atom_indices[a]] .+ (atoms[a] .- 1) .* α for a in eachindex(atoms)]
+    interaction = [Φ(pos - σ) for pos in atom_positions] |> sum
+    elastic = ρ' * sys[2] * ρ / 2
+    max_disp = maximum(abs.(ρ))
+    d = derivatives(μ, α, sys..., atoms, Φ, ρ, ρ_dot, σ, [0, 0, 0])
+    return (interaction, elastic, max_disp, d[2], ρ)
+end
+
+λ = α / 4
+Φ0 = 5000
+
+m_unrelaxed = relaxation(sys, σ_mid, λ, Φ0, 0)
+e_unrelaxed = relaxation(sys, σ_edge, λ, Φ0, 0)
 
 diff_unrelaxed = sum(e_unrelaxed[1:2]) - sum(m_unrelaxed[1:2])
 m_unrelaxed[4] |> maximum
 
-m_relaxed = relaxation(sys, R_mid, λ, U0, 20)
-e_relaxed = relaxation(sys, R_edge, λ, U0, 20)
+m_relaxed = relaxation(sys, σ_mid, λ, Φ0, 150)
+e_relaxed = relaxation(sys, σ_edge, λ, Φ0, 150)
 
 diff_relaxed = sum(e_relaxed[1:2]) - sum(m_relaxed[1:2])
 

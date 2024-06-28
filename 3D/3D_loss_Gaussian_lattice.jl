@@ -1,5 +1,4 @@
 include("../src/unitless.jl")
-include("../src/analytic.jl")
 
 dirs = ["Data", "Data/3D_Loss"]
 [isdir(d) ? nothing : mkdir(d) for d in dirs]
@@ -139,6 +138,7 @@ for λ in λs
             final_speed = current_state[4][3]
             loss[ii] = (init_speed^2) / (8 * π^2) - (final_speed^2) / (8 * π^2)
             next!(prog)
+            GC.safepoint()
         end
 
         save_object(
@@ -180,6 +180,7 @@ for λ in λs
             final_speed = current_state[4][3]
             loss[ii] = (init_speed^2) / (8 * π^2) - (final_speed^2) / (8 * π^2)
             next!(prog)
+            GC.safepoint()
         end
 
         save_object("Data/3D_Loss/3D_Gaussian_Cube_Loss_λ$(λ).jld2", (λ, init_speeds, loss))

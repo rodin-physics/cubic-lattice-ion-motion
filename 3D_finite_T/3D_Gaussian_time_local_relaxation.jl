@@ -1,39 +1,23 @@
-include("../src/unitless.jl")
+include("../src/unitful.jl")
 
 ## PARAMETERS
-μ = [Inf, Inf, 1]           # Mass of the particle in the units of chain masses
-α = 2                       # Lattice constant
-k1 = 15                     # Nearest neighbor force constant
-k2 = 5                      # Next-nearest neighbor force constant
-δτ = 1e-3                   # Time step
+a = 3                       # Lattice constant in Å
+k1 = 520                    # Nearest neighbor force constant in meV / Å²
+k2 = 170                    # Next-nearest neighbor force constant in meV / Å²
+m = 3.5                     # Lattice mass in meV * (ps / Å)²
+ħ = 0.6582119569            # Planck constant in meV * ps
 
-τ_max = 30
-nPts = floor(τ_max / δτ) |> Int
+dt = 1e-2
+t_max = 2
+nPts = floor(t_max / dt) |> Int
 
-init_pos = 3.5 * α
-init_speed = 7.5
-σ = [0, 0, init_pos]
-σ_dot = [0, 0, init_speed]
-
-atoms = [(1, 1, n) for n = 1:8]
 size_x = size_y = size_z = 100
 
-Φ0 = 1
-λ = 1 / 2
-@inline function Φ(r)
-    res = Φ0 * exp(-dot(r, r) / 2 / λ^2)
-    return res
-end
+λ = a / 4
+U0 = 40000
 
-function Φ_total(σ)
-    res = [Φ(σ - α .* [l .- (1, 1, 1)...]) for l in atoms] |> sum
-    return res
-end
-
-function Φ_total_grad(σ)
-    res = vcat(
-        [ForwardDiff.gradient(x -> Φ(x - α .* [l .- (1, 1, 1)...]), σ) for l in atoms]...,
-    )
+@inline function U(r)
+    res = U0 * exp(-dot(r, r) / 2 / λ^2)
     return res
 end
 
@@ -87,36 +71,32 @@ self_coupling = filter(x -> x.k != 0, self_coupling)
 couplings = vcat(N_couplings, NN_couplings, self_coupling)
 
 # Dynamical matrix
-DynamicalMatrix = dynamical_matrix(couplings)
-DynamicalMatrixSmall = dynamical_matrix_small(couplings)
-
-function polaron(L)
-    function fun_int(q)
-        # Solve the eigenproblem
-        eig = eigen(DynamicalMatrix(q))
-        ωs2 = eig.values
-        ηs = eig.vectors
-
-        res = sum([(ηs[:, jj] * ηs[:, jj]') ./ ωs2[jj] for jj = 1:3])
-        return res
-    end
-    res = hcubature(
-        q -> real.(fun_int(q) * exp(1im * dot(q, L)) / (2 * π)^3),
-        0.0 .* ones(3),
-        2.0 .* π .* ones(3),
-        rtol = 1e-3,
-        # initdiv = 30,
-    )
-
-end
-
-polarons = [polaron([atoms[1] .- a...])[1] for a in atoms]
-polaron_matrix = [polarons[abs.(j - k)+1] for j in eachindex(atoms), k in eachindex(atoms)]
-polaron_matrix = vcat([hcat(polaron_matrix[r, :]...) for r in eachindex(atoms)]...)
-
+DynamicalMatrix = dynamical_matrix(m, couplings)
+DynamicalMatrixSmall = dynamical_matrix_small(a, m, couplings)
+LossMat = Loss_Matrix(a, m, DynamicalMatrixSmall)[1]
+W(t) = Recoil(m, DynamicalMatrix, t, [0,0,0])[1]
+V = sys[2][1,1]
 # Make the system
 sys = system(size_x, size_y, size_z, couplings)
 println("Starting calculations...")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## SIMULATIONS
 # Compute the particle trajectory using the full system
